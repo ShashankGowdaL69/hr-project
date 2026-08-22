@@ -34,7 +34,7 @@ def get_data():
     
     # Fallback string if Environment Variable isn't detected yet
     if not uri:
-        uri = "mongodb+srv://cluster0:P%40ssw0rd@cluster0.nffdoqb.mongodb.net/"
+        uri = "mongodb+srv://cluster0:Shashu28@cluster0.nffdoqb.mongodb.net/"
         
     client = MongoClient(
         uri, 
