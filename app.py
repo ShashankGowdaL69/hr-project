@@ -6,11 +6,13 @@ import plotly.express as px
 from pymongo import MongoClient
 from sklearn.ensemble import RandomForestClassifier
 import certifi
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 st.set_page_config(page_title="Workforce Turnover Analysis Dashboard", layout="wide")
 st.title("Workforce Turnover Analysis Dashboard")
 
-# ── Influence weights (your defined table) ──────────────────────────────────
+# Influence weights (your defined table)
 FEATURE_WEIGHTS = {
     'JobSatisfaction':        0.25,
     'MonthlyIncome':          0.20,
@@ -24,7 +26,7 @@ FEATURE_WEIGHTS = {
 FEATURES = list(FEATURE_WEIGHTS.keys())
 WEIGHTS  = np.array(list(FEATURE_WEIGHTS.values()))   # shape (7,)
 
-# ── MongoDB ─────────────────────────────────────────────────────────────────
+# MongoDB
 @st.cache_data
 def get_data():
     # Use the Environment Variable set in Render
@@ -43,7 +45,7 @@ def get_data():
     db = client["hr_database"]
     return pd.DataFrame(list(db["employee_data"].find()))
 
-# ── Preprocessing ────────────────────────────────────────────────────────────
+# Preprocessing
 def preprocess(X: pd.DataFrame) -> pd.DataFrame:
     X = X.copy()
     X['OverTime'] = X['OverTime'].apply(lambda v: 1 if v == 'Yes' else 0)
@@ -52,26 +54,36 @@ def preprocess(X: pd.DataFrame) -> pd.DataFrame:
     X[FEATURES] = X[FEATURES].values * WEIGHTS
     return X
 
-# ── Model training ───────────────────────────────────────────────────────────
+# Model training
 @st.cache_resource
 def train_model(data: pd.DataFrame):
     X = preprocess(data[FEATURES])
     y = data['Attrition'].apply(lambda v: 1 if v == 'Yes' else 0)
 
-    model = RandomForestClassifier(
-        n_estimators=300,       # more trees → stabler predictions
-        max_depth=8,            # deep enough to capture interactions
-        min_samples_split=12,   # avoids overfitting on small leaves
-        min_samples_leaf=5,
-        max_features='sqrt',    # standard best-practice for RF
-        class_weight='balanced',# handles the usual attrition class imbalance
+    # 80% training, 20% testing
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y,
+        test_size=0.2,
         random_state=42,
-        n_jobs=-1               # use all CPU cores
+        stratify=y
     )
-    model.fit(X, y)
+
+    model = RandomForestClassifier(
+        n_estimators=300,
+        max_depth=8,
+        min_samples_split=12,
+        min_samples_leaf=5,
+        max_features='sqrt',
+        class_weight='balanced',
+        random_state=42,
+        n_jobs=-1
+    )
+
+    model.fit(X_train, y_train)
+
     return model
 
-# ── Risk label helper ────────────────────────────────────────────────────────
+# Risk label helper
 def risk_label(prob: float) -> tuple[str, str]:
     if prob >= 65:
         return "🔴 HIGH RISK", "error"
@@ -80,7 +92,7 @@ def risk_label(prob: float) -> tuple[str, str]:
     else:
         return "🟢 LIKELY TO STAY", "success"
 
-# ── Main app ─────────────────────────────────────────────────────────────────
+# Main app
 df = get_data()
 
 if df.empty:
@@ -91,9 +103,7 @@ model = train_model(df)
 
 tab1, tab2 = st.tabs(["Attrition Dashboard", "Predict Attrition Risk"])
 
-# ════════════════════════════════════════════════════════════════════════════
 # TAB 1 — DASHBOARD
-# ════════════════════════════════════════════════════════════════════════════
 with tab1:
     st.sidebar.header("Filter Data")
     departments = df["Department"].unique().tolist()
@@ -144,9 +154,7 @@ with tab1:
     })
     st.table(weight_df)
 
-# ════════════════════════════════════════════════════════════════════════════
 # TAB 2 — PREDICTOR
-# ════════════════════════════════════════════════════════════════════════════
 with tab2:
     st.subheader("Test Employee Profile")
     st.markdown("Enter details below to predict the employee's flight risk.")
@@ -190,7 +198,7 @@ with tab2:
         else:
             st.success(f"{label} — only {prob:.1f}% probability of leaving")
 
-        # ── Personalised suggestions based on weakest factors ────────────
+        # Personalised suggestions based on weakest factors
         st.subheader("💡 Suggestions")
         suggestions = []
 
