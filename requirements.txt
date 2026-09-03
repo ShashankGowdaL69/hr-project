@@ -5,3 +5,4 @@ plotly
 scikit-learn
 numpy
 certifi
+catboost==1.2.10
